@@ -303,13 +303,15 @@ parser.add_argument('--eval-metric', default='top1', type=str, metavar='EVAL_MET
                     help='Best metric (default: "top1"')
 parser.add_argument('--tta', type=int, default=0, metavar='N',
                     help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
-parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
 parser.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='convert model torchscript for inference')
 parser.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
+
+
+local_rank: int = int(os.environ["LOCAL_RANK"])
 
 
 def _parse_args():
@@ -348,8 +350,8 @@ def main():
     args.world_size = 1
     args.rank = 0  # global rank
     if args.distributed:
-        args.device = 'cuda:%d' % args.local_rank
-        torch.cuda.set_device(args.local_rank)
+        args.device = 'cuda:%d' % local_rank
+        torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
         args.world_size = torch.distributed.get_world_size()
         args.rank = torch.distributed.get_rank()
@@ -398,12 +400,12 @@ def main():
     model.eval()
     flops = FlopCountAnalysis(model, torch.rand(1, 3, 224, 224))
 
-    if args.local_rank == 0:
+    if local_rank == 0:
         _logger.info(
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
         print(flop_count_table(flops))
 
-    data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
+    data_config = resolve_data_config(vars(args), model=model, verbose=local_rank == 0)
 
     # setup augmentation batch splits for contrastive loss or split bn
     num_aug_splits = 0
@@ -430,7 +432,7 @@ def main():
             model = convert_syncbn_model(model)
         else:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        if args.local_rank == 0:
+        if local_rank == 0:
             _logger.info(
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
                 'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')
@@ -448,15 +450,15 @@ def main():
     if use_amp == 'apex':
         model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
         loss_scaler = ApexScaler()
-        if args.local_rank == 0:
+        if local_rank == 0:
             _logger.info('Using NVIDIA APEX AMP. Training in mixed precision.')
     elif use_amp == 'native':
         amp_autocast = torch.cuda.amp.autocast
         loss_scaler = NativeScaler()
-        if args.local_rank == 0:
+        if local_rank == 0:
             _logger.info('Using native Torch AMP. Training in mixed precision.')
     else:
-        if args.local_rank == 0:
+        if local_rank == 0:
             _logger.info('AMP not enabled. Training in float32.')
 
     # optionally resume from a checkpoint
@@ -468,7 +470,7 @@ def main():
                 model, args.resume,
                 optimizer=None if args.no_resume_opt else optimizer,
                 loss_scaler=None if args.no_resume_opt else loss_scaler,
-                log_info=args.local_rank == 0,
+                log_info=local_rank == 0,
                 )
 
     # setup exponential moving average of model weights, SWA could be used here too
@@ -484,13 +486,13 @@ def main():
     if args.distributed:
         if has_apex and use_amp == 'apex':
             # Apex DDP preferred unless native amp is activated
-            if args.local_rank == 0:
+            if local_rank == 0:
                 _logger.info("Using NVIDIA APEX DistributedDataParallel.")
             model = ApexDDP(model, delay_allreduce=True)
         else:
-            if args.local_rank == 0:
+            if local_rank == 0:
                 _logger.info("Using native Torch DistributedDataParallel.")
-            model = NativeDDP(model, device_ids=[args.local_rank], broadcast_buffers=not args.no_ddp_bb)
+            model = NativeDDP(model, device_ids=[local_rank], broadcast_buffers=not args.no_ddp_bb)
         # NOTE: EMA model does not need to be wrapped by DDP
 
     # setup learning rate schedule and starting epoch
@@ -504,7 +506,7 @@ def main():
     if lr_scheduler is not None and start_epoch > 0:
         lr_scheduler.step(start_epoch)
 
-    if args.local_rank == 0:
+    if local_rank == 0:
         _logger.info('Scheduled epochs: {}'.format(num_epochs))
 
     # create the train and eval datasets
@@ -652,7 +654,7 @@ def main():
             # entropy_thr = entropy_thr * 2.0
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
-                if args.local_rank == 0:
+                if local_rank == 0:
                     _logger.info("Distributing BatchNorm running means and vars")
                 distribute_bn(model, args.world_size, args.dist_bn == 'reduce')
 
@@ -753,7 +755,7 @@ def train_one_epoch(
                 reduced_loss = reduce_tensor(loss.data, args.world_size)
                 losses_m.update(reduced_loss.item(), input.size(0))
 
-            if args.local_rank == 0:
+            if local_rank == 0:
                 _logger.info(
                     'Train: {} [{:>4d}/{} ({:>3.0f}%)]  '
                     'Loss: {loss.val:#.4g} ({loss.avg:#.3g})  '
@@ -860,7 +862,7 @@ def validate(model, loader, loss_fn, args, amp_autocast=suppress, log_suffix='')
 
             batch_time_m.update(time.time() - end)
             end = time.time()
-            if args.local_rank == 0 and (last_batch or batch_idx % args.log_interval == 0):
+            if local_rank == 0 and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 _logger.info(
                     '{0}: [{1:>4d}/{2}]  '
