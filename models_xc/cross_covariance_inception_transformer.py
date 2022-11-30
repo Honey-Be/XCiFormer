@@ -35,6 +35,13 @@ import math
 import warnings
 from timm.models.layers.helpers import to_2tuple
 
+class ConsumingSequential(nn.Sequential):
+    def forward(self, *input):
+        for module in self._modules.values():
+            input = module(*input)
+        return input
+
+
 
 _logger = logging.getLogger(__name__)
 
@@ -418,7 +425,7 @@ class XCInceptionTransformer(nn.Module):
         self.patch_embed = XCFirstPatchEmbed(in_chans=in_chans, embed_dim=embed_dims[0])
         self.num_patches1 = num_patches = img_size // 4
         self.pos_embed1 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[0]))
-        self.blocks1 = nn.Sequential(*[
+        self.blocks1 = ConsumingSequential(*[
             XCiFormerBlock(
                 dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=2,)
@@ -430,7 +437,7 @@ class XCInceptionTransformer(nn.Module):
         self.patch_embed2 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[0], embed_dim=embed_dims[1])
         self.num_patches2 = num_patches = num_patches // 2
         self.pos_embed2 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[1]))
-        self.blocks2 = nn.Sequential(*[
+        self.blocks2 = ConsumingSequential(*[
             XCiFormerBlock(
                 dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=2,)
@@ -441,7 +448,7 @@ class XCInceptionTransformer(nn.Module):
         self.patch_embed3 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[1], embed_dim=embed_dims[2])
         self.num_patches3 = num_patches = num_patches // 2
         self.pos_embed3 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[2]))
-        self.blocks3= nn.Sequential(*[
+        self.blocks3= ConsumingSequential(*[
             XCiFormerBlock(
                 dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=1,
@@ -452,7 +459,7 @@ class XCInceptionTransformer(nn.Module):
         self.patch_embed4 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[2], embed_dim=embed_dims[3])
         self.num_patches4 = num_patches = num_patches // 2
         self.pos_embed4 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[3]))
-        self.blocks4 = nn.Sequential(*[
+        self.blocks4 = ConsumingSequential(*[
             XCiFormerBlock(
                 dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=1,
