@@ -42,8 +42,8 @@ from timm.utils import ApexScaler, NativeScaler
 from fvcore.nn import FlopCountAnalysis
 from fvcore.nn import flop_count_table
 
-import models
-# import models_xc
+# import models
+import models_xc
 
 try:
     from apex import amp
