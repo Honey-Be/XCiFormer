@@ -59,3 +59,26 @@ class FirstPatchEmbed(nn.Module):
         x = self.norm2(x)    
         x = x.permute(0,2,3,1)
         return x
+
+
+
+class LPI(nn.module):
+    def __init__(self, in_features, out_features=None, act_layer=nn.GELU, kernel_size=3):
+        super().__init__()
+        out_features = out_features or in_features
+        padding = kernel_size // 2
+
+        self.conv1 = torch.nn.Conv2d(in_features, in_features, kernel_size=kernel_size, padding=padding, groups=in_features)
+        self.act = act_layer()
+        self.bn = nn.BatchNorm2d(in_features)
+        self.conv2 = torch.nn.Conv2d(in_features, out_features, kernel_size=kernel_size, padding=padding, groups=in_features)
+
+    def forward(self, x, H: int, W: int):
+        B, C, N = x.shape
+        x = x.reshape(B, C, H, W)
+        x = self.conv1(x)
+        x = self.act(x)
+        x = self.bn(x)
+        x = self.conv2(x)
+        x = self.reshape(B, C, N)
+        return x

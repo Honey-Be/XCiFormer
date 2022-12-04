@@ -153,7 +153,7 @@ def variance_scaling_(tensor, scale=1.0, mode='fan_in', distribution='normal'):
 def lecun_normal_(tensor):
     variance_scaling_(tensor, mode='fan_in', distribution='truncated_normal')
 
-from .patch_embed import *
+from .patches import *
 from .mixers import *
 from .blocks import *
 
@@ -184,7 +184,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         self.patch_embed = FirstPatchEmbed(in_chans=in_chans, embed_dim=embed_dims[0])
         self.num_patches1 = num_patches = img_size // 4
         self.pos_embed1 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[0]))
-        self.blocks1 = nn.Sequential(*[
+        self.blocks1 = nn.ModuleList([
             XCiFormerBlock(
                 dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=2,)
@@ -196,7 +196,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         self.patch_embed2 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[0], embed_dim=embed_dims[1])
         self.num_patches2 = num_patches = num_patches // 2
         self.pos_embed2 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[1]))
-        self.blocks2 = nn.Sequential(*[
+        self.blocks2 = nn.ModuleList([
             XCiFormerBlock(
                 dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=2,)
@@ -207,7 +207,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         self.patch_embed3 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[1], embed_dim=embed_dims[2])
         self.num_patches3 = num_patches = num_patches // 2
         self.pos_embed3 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[2]))
-        self.blocks3= nn.Sequential(*[
+        self.blocks3= nn.ModuleList([
             XCiFormerBlock(
                 dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=1,
@@ -218,7 +218,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         self.patch_embed4 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[2], embed_dim=embed_dims[3])
         self.num_patches4 = num_patches = num_patches // 2
         self.pos_embed4 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[3]))
-        self.blocks4 = nn.Sequential(*[
+        self.blocks4 = nn.ModuleList([
             XCiFormerBlock(
                 dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, drop=drop_rate,
                 attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer, act_layer=act_layer, attention_head=attention_heads[i], pool_size=1,
@@ -274,25 +274,34 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         x = self.patch_embed(x)
         B, H, W, C = x.shape
         x = x + self._get_pos_embed(self.pos_embed1, self.num_patches1, H, W) 
-        x = self.blocks1(x)
-        
+        # x = self.blocks1(x)
+        for blk1 in self.blocks1:
+            x = blk1(x, H, W)
+
+
         x = x.permute(0, 3, 1, 2)       
         x = self.patch_embed2(x)
         B, H, W, C = x.shape
         x = x + self._get_pos_embed(self.pos_embed2, self.num_patches2, H, W) 
-        x = self.blocks2(x)
+        # x = self.blocks2(x)
+        for blk2 in self.blocks2:
+            x = blk2(x, H, W)
         
         x = x.permute(0, 3, 1, 2)  
         x = self.patch_embed3(x)
         B, H, W, C = x.shape
         x = x + self._get_pos_embed(self.pos_embed3, self.num_patches3, H, W) 
-        x = self.blocks3(x)
+        # x = self.blocks3(x)
+        for blk3 in self.blocks3:
+            x = blk3(x, H, W)
         
         x = x.permute(0, 3, 1, 2)  
         x = self.patch_embed4(x)
         B, H, W, C = x.shape
         x = x + self._get_pos_embed(self.pos_embed4, self.num_patches4, H, W) 
-        x = self.blocks4(x)
+        # x = self.blocks4(x)
+        for blk4 in self.blocks4:
+            x = blk4(x, H, W)
         x = x.flatten(1,2)
 
         x = self.norm(x)

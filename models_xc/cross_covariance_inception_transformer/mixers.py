@@ -17,6 +17,16 @@ import math
 import warnings
 from timm.models.layers.helpers import to_2tuple
 
+def floored_sqrt(n: int) -> int:
+    if n > 3:
+        return max(filter(lambda m: (m*m) <= n, range(0, n)))
+    elif n > 0:
+        return 1
+    elif n < 0:
+        raise ArithmeticError
+    else:
+        return 0
+
 class XCHighMixer(nn.Module):
     def __init__(self, dim, kernel_size=3, stride=1, padding=1,
         **kwargs, ):
@@ -69,11 +79,14 @@ class XCLowMixer(nn.Module):
         
 
     def att_fun(self, q, k, v, B, N, C):
+        q = torch.nn.functional.normalize(q, dim=-1)
+        k = torch.nn.functional.normalize(k, dim=-1)
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        # x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = (attn @ v).transpose(2, 3).reshape(B, C, N)
+
+        # x = (attn @ v).permute(0, 3, 1, 2).reshape(B, N, C)
+        x = (attn @ v).reshape(B, C, N)
         return x
 
     def forward(self, x):
@@ -82,7 +95,7 @@ class XCLowMixer(nn.Module):
         xa = self.pool(x)
         xa = xa.permute(0, 2, 3, 1).view(B, -1, self.dim)
         B, N, C = xa.shape
-        qkv = self.qkv(xa).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        qkv = self.qkv(xa).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 4, 1)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
         xa = self.att_fun(q, k, v, B, N, C)
         xa = xa.view(B, C, int(N**0.5), int(N**0.5))#.permute(0, 3, 1, 2)
