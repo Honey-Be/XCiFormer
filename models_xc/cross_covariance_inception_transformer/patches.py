@@ -16,12 +16,12 @@ from torch.nn.init import _calculate_fan_in_and_fan_out
 import math
 import warnings
 from timm.models.layers.helpers import to_2tuple
-from mixers import *
+from .mixers import *
 
-class PatchEmbed(nn.Module):
+class XCiTPatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
     """
-    def __init__(self, img_size=224, kernel_size=16,  stride=16, padding=0, in_chans=3, embed_dim=768):
+    def __init__(self, img_size=224, kernel_size=16, padding=0, stride=16, in_chans=3, embed_dim=768, **kwargs):
         super().__init__()
         kernel_size = to_2tuple(kernel_size)
         stride = to_2tuple(stride)
@@ -38,10 +38,10 @@ class PatchEmbed(nn.Module):
         x = x.permute(0,2,3,1)
         return x
 
-class FirstPatchEmbed(nn.Module):
+class XCiTFirstPatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
     """
-    def __init__(self, kernel_size=3,  stride=2, padding=1, in_chans=3, embed_dim=768):
+    def __init__(self, kernel_size=3, padding=1, stride=2, in_chans=3, embed_dim=768, **kwargs):
         super().__init__()
         
         self.proj1 = nn.Conv2d(in_chans, embed_dim//2, kernel_size=kernel_size, stride=stride, padding=padding )
@@ -62,23 +62,23 @@ class FirstPatchEmbed(nn.Module):
 
 
 
-class LPI(nn.module):
-    def __init__(self, in_features, out_features=None, act_layer=nn.GELU, kernel_size=3):
+class LPI(nn.Module):
+    def __init__(self, in_features, out_features=None, act_layer=nn.GELU, kernel_size=3, **kwargs):
         super().__init__()
         out_features = out_features or in_features
         padding = kernel_size // 2
 
-        self.conv1 = torch.nn.Conv2d(in_features, in_features, kernel_size=kernel_size, padding=padding, groups=in_features)
+        self.conv1 = nn.Conv2d(in_features, in_features, kernel_size=kernel_size, padding=padding, groups=in_features)
         self.act = act_layer()
         self.bn = nn.BatchNorm2d(in_features)
-        self.conv2 = torch.nn.Conv2d(in_features, out_features, kernel_size=kernel_size, padding=padding, groups=in_features)
+        self.conv2 = nn.Conv2d(in_features, out_features, kernel_size=kernel_size, padding=padding, groups=in_features)
 
-    def forward(self, x, H: int, W: int):
-        B, C, N = x.shape
-        x = x.reshape(B, C, H, W)
+    def forward(self, x):
+        B, H, W, C = x.shape
+        x = x.permute(0, 3, 1, 2)
         x = self.conv1(x)
         x = self.act(x)
         x = self.bn(x)
         x = self.conv2(x)
-        x = self.reshape(B, C, N)
+        x = x.permute(0, 2, 3, 1)
         return x

@@ -18,7 +18,7 @@ import warnings
 from timm.models.layers.helpers import to_2tuple
 
 from .mixers import *
-from patches import LPI
+from .patches import LPI
 class XCiFormerBlock(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
@@ -48,13 +48,14 @@ class XCiFormerBlock(nn.Module):
             self.layer_scale_3 = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
             self.layer_scale_2 = nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
 
-    def forward(self, x, S: tuple[int, int]):
+    def forward(self, x):
         if self.use_layer_scale:
             x = x + self.drop_path(self.layer_scale_1 * self.attn(self.norm1(x)))
-            x = x + self.drop_path(self.layer_scale_3 * self.local_mp(self.norm3(x), S[0], S[1]))
+            x = x + self.drop_path(self.layer_scale_3 * self.local_mp(self.norm3(x)))
             x = x + self.drop_path(self.layer_scale_2 * self.mlp(self.norm2(x)))
         else:
             x = x + self.drop_path(self.attn(self.norm1(x)))
-            x = x + self.drop_path(self.local_mp(self.norm3(x), S[0], S[1]))
-            x = x + self.drop_path(self.mlp(self.norm2(x)))
+            x = x + self.drop_path(self.local_mp(self.norm3(x)))
+            x2 = self.norm2(x)
+            x = x + self.drop_path(self.mlp(x2))
         return x

@@ -160,12 +160,12 @@ from .blocks import *
 class CrossCovarianceInceptionTransformer(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=None, depths=None,
                 num_heads=None, mlp_ratio=4., qkv_bias=True, 
-                drop_rate=0., attn_drop_rate=0., drop_path_rate=0., embed_layer=PatchEmbed, norm_layer=None,
+                drop_rate=0., attn_drop_rate=0., drop_path_rate=0., norm_layer=None,
                 act_layer=None, weight_init='',
                 attention_heads=None,
                 use_layer_scale=False, layer_scale_init_value=1e-5, 
                 checkpoint_path=None,
-                **kwargs, 
+                **kwargs
                 ):
         
         super().__init__()
@@ -181,7 +181,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         
-        self.patch_embed = FirstPatchEmbed(in_chans=in_chans, embed_dim=embed_dims[0])
+        self.patch_embed = XCiTFirstPatchEmbed(in_chans=in_chans, embed_dim=embed_dims[0])
         self.num_patches1 = num_patches = img_size // 4
         self.pos_embed1 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[0]))
         self.blocks1 = nn.ModuleList([
@@ -193,7 +193,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
             for i in range(0, st2_idx)])
 
 
-        self.patch_embed2 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[0], embed_dim=embed_dims[1])
+        self.patch_embed2 = XCiTPatchEmbed(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[0], embed_dim=embed_dims[1])
         self.num_patches2 = num_patches = num_patches // 2
         self.pos_embed2 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[1]))
         self.blocks2 = nn.ModuleList([
@@ -204,7 +204,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
                 # )
             for i in range(st2_idx,st3_idx)])
         
-        self.patch_embed3 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[1], embed_dim=embed_dims[2])
+        self.patch_embed3 = XCiTPatchEmbed(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[1], embed_dim=embed_dims[2])
         self.num_patches3 = num_patches = num_patches // 2
         self.pos_embed3 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[2]))
         self.blocks3= nn.ModuleList([
@@ -215,7 +215,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
                 )
             for i in range(st3_idx, st4_idx)])
         
-        self.patch_embed4 = embed_layer(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[2], embed_dim=embed_dims[3])
+        self.patch_embed4 = XCiTPatchEmbed(kernel_size=3, stride=2, padding=1, in_chans=embed_dims[2], embed_dim=embed_dims[3])
         self.num_patches4 = num_patches = num_patches // 2
         self.pos_embed4 = nn.Parameter(torch.zeros(1, num_patches, num_patches, embed_dims[3]))
         self.blocks4 = nn.ModuleList([
@@ -276,7 +276,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         x = x + self._get_pos_embed(self.pos_embed1, self.num_patches1, H, W) 
         # x = self.blocks1(x)
         for blk1 in self.blocks1:
-            x = blk1(x, H, W)
+            x = blk1(x)
 
 
         x = x.permute(0, 3, 1, 2)       
@@ -285,7 +285,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         x = x + self._get_pos_embed(self.pos_embed2, self.num_patches2, H, W) 
         # x = self.blocks2(x)
         for blk2 in self.blocks2:
-            x = blk2(x, H, W)
+            x = blk2(x)
         
         x = x.permute(0, 3, 1, 2)  
         x = self.patch_embed3(x)
@@ -293,7 +293,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         x = x + self._get_pos_embed(self.pos_embed3, self.num_patches3, H, W) 
         # x = self.blocks3(x)
         for blk3 in self.blocks3:
-            x = blk3(x, H, W)
+            x = blk3(x)
         
         x = x.permute(0, 3, 1, 2)  
         x = self.patch_embed4(x)
@@ -301,7 +301,7 @@ class CrossCovarianceInceptionTransformer(nn.Module):
         x = x + self._get_pos_embed(self.pos_embed4, self.num_patches4, H, W) 
         # x = self.blocks4(x)
         for blk4 in self.blocks4:
-            x = blk4(x, H, W)
+            x = blk4(x)
         x = x.flatten(1,2)
 
         x = self.norm(x)
