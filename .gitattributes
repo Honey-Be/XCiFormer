@@ -1,0 +1,2 @@
+imagenet/train/**/*.JPEG filter=lfs diff=lfs merge=lfs -text
+imagenet/val/*.JPEG filter=lfs diff=lfs merge=lfs -text
