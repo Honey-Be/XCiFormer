@@ -1,3 +1,5 @@
 __pycache__/*
 models/__pycache__/*
 models_xc/__pycache__/*
+imagenet/train/**/*.JPEG
+imagenet/val/*.JPEG
